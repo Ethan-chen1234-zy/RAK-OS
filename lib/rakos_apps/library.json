@@ -1,0 +1,7 @@
+{
+  "name": "rakos_apps",
+  "version": "0.1.0",
+  "description": "RAKOS SD app registry",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"]
+}

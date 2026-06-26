@@ -1,0 +1,4 @@
+# RAKOS WiFi — copy to TF card root as wifi.ini
+# Device path: /sdcard/wifi.ini
+ssid=RAK-VPN
+password=YOUR_PASSWORD_HERE

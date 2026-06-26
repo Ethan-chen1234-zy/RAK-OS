@@ -1,0 +1,30 @@
+#ifndef LV_CONF_H
+#define LV_CONF_H
+
+#include <stdint.h>
+
+#define LV_COLOR_DEPTH 16
+#define LV_COLOR_16_SWAP 0
+
+#define LV_USE_STDLIB_MALLOC    LV_STDLIB_BUILTIN
+#define LV_USE_STDLIB_STRING    LV_STDLIB_BUILTIN
+#define LV_USE_STDLIB_SPRINTF   LV_STDLIB_BUILTIN
+#define LV_MEM_SIZE (48 * 1024U)
+
+#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE
+#define LV_USE_NATIVE_HELIUM_ASM 0
+
+#define LV_USE_LOG 0
+
+#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_24 1
+#define LV_FONT_DEFAULT &lv_font_montserrat_20
+
+#define LV_USE_ARC 1
+#define LV_USE_LABEL 1
+#define LV_USE_THEME_DEFAULT 1
+#if LV_USE_THEME_DEFAULT
+#define LV_THEME_DEFAULT_DARK 1
+#endif
+
+#endif

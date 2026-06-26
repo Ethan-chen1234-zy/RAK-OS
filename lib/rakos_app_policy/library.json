@@ -1,0 +1,7 @@
+{
+  "name": "rakos_app_policy",
+  "version": "0.1.0",
+  "description": "User-app rollback policy hooks (not used by OS firmware)",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"]
+}

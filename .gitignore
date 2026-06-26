@@ -1,0 +1,33 @@
+# PlatformIO build and dependency cache
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build artifacts and release packages
+build/
+dist/
+*.bin
+*.elf
+*.hex
+*.map
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.orig
+backups/
+
+# Editor and IDE local state
+.vscode/
+.idea/
+*.code-workspace
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python cache from helper scripts
+__pycache__/
+*.py[cod]

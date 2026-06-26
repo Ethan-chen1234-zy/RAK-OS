@@ -1,0 +1,7 @@
+{
+  "name": "rakos_core",
+  "version": "0.1.0",
+  "description": "RAKOS boot and configuration manager",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"]
+}

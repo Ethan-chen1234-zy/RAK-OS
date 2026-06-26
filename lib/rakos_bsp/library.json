@@ -1,0 +1,14 @@
+{
+  "name": "rakos_bsp",
+  "version": "0.2.0",
+  "description": "RAKOS board support: AMOLED, touch, PMIC, IMU, audio, storage",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "includeDir": "include",
+    "srcFilter": [
+      "+<*>",
+      "+<../lcd5/*.cpp>"
+    ]
+  }
+}
