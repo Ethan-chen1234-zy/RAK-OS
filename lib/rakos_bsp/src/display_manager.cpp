@@ -45,8 +45,12 @@ void DisplayManager::display_rounder_event_cb(lv_event_t *e) {
 DisplayManager::DisplayManager()
     : bus(nullptr),
       gfx(nullptr),
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+      touch_cst92xx_(nullptr),
+#else
       touch_bus_(nullptr),
       touch_(nullptr),
+#endif
       display(nullptr),
       buf(nullptr),
       buf2(nullptr) {
@@ -55,8 +59,12 @@ DisplayManager::DisplayManager()
 
 DisplayManager::~DisplayManager() {
     g_touch_for_isr = nullptr;
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    touch_cst92xx_.reset();
+#else
     touch_.reset();
     touch_bus_.reset();
+#endif
     if (buf) {
         free(buf);
     }
@@ -70,18 +78,59 @@ DisplayManager::~DisplayManager() {
 
 bool DisplayManager::initTouch() {
     g_touch_for_isr = nullptr;
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    touch_cst92xx_.reset();
+#else
     touch_.reset();
     touch_bus_.reset();
+#endif
 
+#if RAKOS_HAS_IO_EXPANDER
     auto &expander = rakos::IoExpander::instance();
     if (expander.ready()) {
         expander.pulseTouchReset();
     }
+#elif TOUCH_RST >= 0
+    pinMode(TOUCH_RST, OUTPUT);
+    digitalWrite(TOUCH_RST, LOW);
+    delay(20);
+    digitalWrite(TOUCH_RST, HIGH);
+    delay(120);
+#endif
 
     rakos::i2cBusRecover();
     delay(50);
     pinMode(TOUCH_INT, INPUT_PULLUP);
 
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    rakos::I2cLockGuard bus_lock(500);
+    if (!bus_lock.locked()) {
+        Serial.println("[BSP] CST92xx init: I2C lock timeout");
+        return false;
+    }
+
+    touch_cst92xx_ = std::make_unique<TouchDrvCST92xx>();
+    touch_cst92xx_->setPins(TOUCH_RST, TOUCH_INT);
+    touch_cst92xx_->setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
+    touch_cst92xx_->setMirrorXY(false, false);
+    touch_cst92xx_->setSwapXY(false);
+
+    for (uint8_t attempt = 0; attempt < 5; ++attempt) {
+        if (touch_cst92xx_->begin(Wire, TOUCH_I2C_ADDR, I2C_SDA, I2C_SCL)) {
+            Serial.printf("[BSP] %s touch ready @0x%02X\n",
+                          touch_cst92xx_->getModelName(),
+                          TOUCH_I2C_ADDR);
+            return true;
+        }
+        Serial.println("[BSP] CST92xx init retry...");
+        delay(200);
+    }
+
+    touch_cst92xx_.reset();
+    Serial.println("[BSP] CST92xx touch init failed");
+    rakos::i2cBusScan();
+    return false;
+#else
     rakos::I2cLockGuard bus_lock(500);
     if (!bus_lock.locked()) {
         Serial.println("[BSP] Touch init: I2C lock timeout");
@@ -132,9 +181,25 @@ bool DisplayManager::initTouch() {
     Serial.println("[BSP] Touch init failed");
     rakos::i2cBusScan();
     return false;
+#endif
 }
 
 bool DisplayManager::readTouch(int16_t &x, int16_t &y) {
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    if (!touch_cst92xx_) {
+        return false;
+    }
+
+    const TouchPoints &points = touch_cst92xx_->getTouchPoints();
+    if (!points.hasPoints()) {
+        return false;
+    }
+
+    const TouchPoint &point = points.getPoint(0);
+    x = (int16_t)point.x;
+    y = (int16_t)point.y;
+    return true;
+#else
     if (!touch_) {
         return false;
     }
@@ -144,21 +209,33 @@ bool DisplayManager::readTouch(int16_t &x, int16_t &y) {
     y = (int16_t)touch_->IIC_Read_Device_Value(
         touch_->Arduino_IIC_Touch::Value_Information::TOUCH_COORDINATE_Y);
     return touch_->IIC_Interrupt_Flag;
+#endif
 }
 
 bool DisplayManager::init() {
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    Serial.println("[BSP] Display bring-up (PY206-W38-V2 CO5300 AMOLED)...");
+#else
     Serial.println("[BSP] Display bring-up (Waveshare 1.8 AMOLED)...");
+#endif
 
     prefs.begin("rakos_ui", false);
 
+#if RAKOS_HAS_IO_EXPANDER
     auto &expander = rakos::IoExpander::instance();
     if (!expander.ready() && !expander.begin()) {
         Serial.println("[BSP] IO expander init failed");
         return false;
     }
+#endif
 
     bus = new Arduino_ESP32QSPI(LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
+#if defined(RAKOS_PANEL_CO5300)
+    gfx = new Arduino_CO5300(
+        bus, LCD_RST, 0, LCD_WIDTH, LCD_HEIGHT, LCD_COL_OFFSET, LCD_ROW_OFFSET);
+#else
     gfx = new Arduino_SH8601(bus, GFX_NOT_DEFINED, 0, LCD_WIDTH, LCD_HEIGHT);
+#endif
     if (!gfx->begin()) {
         Serial.println("[BSP] Panel init failed");
         return false;
@@ -173,7 +250,11 @@ bool DisplayManager::init() {
     gfx->fillScreen(0x0010);
     delay(80);
     gfx->fillScreen(0x0000);
+#if defined(RAKOS_PANEL_CO5300)
+    Serial.println("[BSP] CO5300 panel up");
+#else
     Serial.println("[BSP] SH8601 panel up");
+#endif
 
     lv_init();
 
@@ -254,6 +335,14 @@ void DisplayManager::setBrightness(uint8_t brightness, bool persist) {
     prefs.putUChar("brightness_pct", pct);
 }
 
+void DisplayManager::setBrightnessPercent(uint8_t pct, bool persist) {
+    if (pct > 100) {
+        pct = 100;
+    }
+    const uint8_t level = (uint8_t)(((uint16_t)pct * 255 + 50) / 100);
+    setBrightness(level, persist);
+}
+
 uint8_t DisplayManager::getBrightnessPercentage() {
     uint8_t pct = prefs.getUChar("brightness_pct", 80);
     if (pct == 0) {
@@ -264,6 +353,13 @@ uint8_t DisplayManager::getBrightnessPercentage() {
 }
 
 bool DisplayManager::getTouchCoordinates(int16_t &x, int16_t &y) {
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    rakos::I2cLockGuard lock(100);
+    if (!lock.locked()) {
+        return false;
+    }
+    return readTouch(x, y);
+#else
     if (!touch_ || !touch_->IIC_Interrupt_Flag) {
         return false;
     }
@@ -273,6 +369,7 @@ bool DisplayManager::getTouchCoordinates(int16_t &x, int16_t &y) {
     y = (int16_t)touch_->IIC_Read_Device_Value(
         touch_->Arduino_IIC_Touch::Value_Information::TOUCH_COORDINATE_Y);
     return true;
+#endif
 }
 
 void DisplayManager::disp_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
@@ -296,11 +393,40 @@ void DisplayManager::touchpad_read_callback(lv_indev_t *indev, lv_indev_data_t *
     data->point.y = g_touch_last_y;
     data->state = g_touch_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 
-    if (!instance || !instance->touch_) {
+    if (!instance ||
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+        !instance->touch_cst92xx_
+#else
+        !instance->touch_
+#endif
+    ) {
         g_touch_down = false;
         return;
     }
 
+#if defined(RAKOS_BOARD_PY206_W38_V2)
+    rakos::I2cLockGuard lock(100);
+    if (!lock.locked()) {
+        if (g_touch_down) {
+            data->state = LV_INDEV_STATE_PRESSED;
+        }
+        return;
+    }
+
+    int16_t x = 0;
+    int16_t y = 0;
+    if (instance->readTouch(x, y) && x >= 0 && y >= 0 && x < LCD_WIDTH && y < LCD_HEIGHT) {
+        g_touch_last_x = x;
+        g_touch_last_y = y;
+        g_touch_down = true;
+        data->state = LV_INDEV_STATE_PRESSED;
+        data->point.x = x;
+        data->point.y = y;
+    } else {
+        g_touch_down = false;
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
+#else
     const bool active =
         instance->touch_->IIC_Interrupt_Flag || digitalRead(TOUCH_INT) == LOW;
     if (!active) {
@@ -334,6 +460,7 @@ void DisplayManager::touchpad_read_callback(lv_indev_t *indev, lv_indev_data_t *
         g_touch_down = false;
         data->state = LV_INDEV_STATE_RELEASED;
     }
+#endif
 }
 
 #endif /* !RAKOS_BOARD_WAVESHARE_LCD5 */

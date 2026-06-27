@@ -108,6 +108,14 @@ void DisplayManager::setBrightness(uint8_t brightness, bool persist) {
     }
 }
 
+void DisplayManager::setBrightnessPercent(uint8_t pct, bool persist) {
+    if (pct > 100) {
+        pct = 100;
+    }
+    const uint8_t level = (uint8_t)(((uint16_t)pct * 255 + 50) / 100);
+    setBrightness(level, persist);
+}
+
 uint8_t DisplayManager::getBrightnessPercentage() {
     uint8_t pct = prefs.getUChar("brightness_pct", 80);
     if (pct == 0) {

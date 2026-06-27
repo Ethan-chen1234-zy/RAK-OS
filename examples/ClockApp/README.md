@@ -1,6 +1,21 @@
 # ClockApp — RAKOS watch demo
 
-Analog + digital clock for **ota_1** (`0x400000`). Reads the board RTC (PCF85063 / PCF8563 on I2C) when available; otherwise runs a software clock seeded from firmware build time.
+Analog + digital clock for **ota_1** (`0x400000`).
+
+Time sources (priority): **NTP** via SD `wifi.ini` → board **RTC** → **soft clock** (build time).
+
+Tap **Clock** title to switch to **Stopwatch**; tap the time to start/pause.
+
+## WiFi / NTP
+
+Place `wifi.ini` on the TF card root (same as RAKOS OS):
+
+```ini
+ssid=YourNetwork
+password=YourPassword
+```
+
+ClockApp reads it on boot, connects WiFi, syncs NTP (UTC+8), and writes the RTC when present.
 
 ## Build
 

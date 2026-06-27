@@ -21,6 +21,8 @@
 #define LV_FONT_DEFAULT &lv_font_montserrat_20
 
 #define LV_USE_LABEL 1
+#define LV_USE_BUTTON 1
+#define LV_USE_TEXTAREA 1
 #define LV_USE_THEME_DEFAULT 1
 #if LV_USE_THEME_DEFAULT
 #define LV_THEME_DEFAULT_DARK 1
