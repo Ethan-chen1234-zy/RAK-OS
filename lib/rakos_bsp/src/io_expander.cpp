@@ -68,6 +68,46 @@ void IoExpander::boardPowerOn() {}
 
 void IoExpander::pulseTouchReset() {}
 
+#elif !RAKOS_HAS_IO_EXPANDER
+
+bool IoExpander::begin() {
+    ready_ = false;
+    return true;
+}
+
+void IoExpander::pinMode(uint8_t pin, uint8_t mode) {
+    (void)pin;
+    (void)mode;
+}
+
+void IoExpander::digitalWrite(uint8_t pin, uint8_t level) {
+    (void)pin;
+    (void)level;
+}
+
+bool IoExpander::digitalRead(uint8_t pin) {
+    (void)pin;
+    return false;
+}
+
+void IoExpander::setOutputs(uint8_t value) {
+    (void)value;
+}
+
+void IoExpander::boardPowerOn() {}
+
+void IoExpander::pulseTouchReset() {}
+
+void IoExpander::writeReg(uint8_t reg, uint8_t value) {
+    (void)reg;
+    (void)value;
+}
+
+uint8_t IoExpander::readReg(uint8_t reg) {
+    (void)reg;
+    return 0xFF;
+}
+
 #else  /* AMOLED TCA9554 */
 
 static constexpr uint8_t kRegInput = 0x00;

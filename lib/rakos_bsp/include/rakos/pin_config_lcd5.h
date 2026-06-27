@@ -10,6 +10,10 @@
 #define RAKOS_HAS_AXP_PMU         0
 #define RAKOS_HAS_IMU             0
 #define RAKOS_HAS_AUDIO           0
+#define RAKOS_HAS_IO_EXPANDER     1
+#define RAKOS_HAS_RGB_LED         0
+#define RAKOS_HAS_USB_UART        1
+#define RAKOS_HAS_SD_CARD         1
 #define RAKOS_HAS_BUZZER          1
 #define RAKOS_HAS_RS485           1
 #define RAKOS_HAS_CAN             1

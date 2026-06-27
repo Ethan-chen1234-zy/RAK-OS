@@ -59,12 +59,17 @@ void setup() {
 #if defined(RAKOS_BOARD_WAVESHARE_LCD5) || defined(RAKOS_BOARD_WAVESHARE_LCD5B)
     Serial.println("[BSP] LCD-5: ESP Panel owns I2C (no Wire before display)");
 #else
+#if RAKOS_HAS_IO_EXPANDER
     if (!expander.begin()) {
         Serial.println("[FATAL] IO expander init failed");
     } else {
         expander.boardPowerOn();
         Serial.println("[BSP] AMOLED power sequence done");
     }
+#else
+    (void)expander;
+    Serial.println("[BSP] Direct-wired board: no IO expander power sequence");
+#endif
 #endif
 
     os_config.begin();
