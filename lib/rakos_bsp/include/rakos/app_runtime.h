@@ -12,7 +12,9 @@ namespace rakos {
 class AppRuntime {
 public:
     static bool beginHardware(DisplayManager &display, InputManager &input);
-    static void pumpUi(DisplayManager &display);
+
+    /** LVGL pump + ota_1 boot confirmation when app_ready_ms is set. */
+    static void pumpUi(DisplayManager &display, uint32_t app_ready_ms = 0);
 
     /** Call once from setup() after beginHardware() to build LVGL UI safely. */
     static void buildUiLocked(void (*build_fn)());

@@ -1,4 +1,5 @@
 #include <rakos/app_runtime.h>
+#include <rakos/app_boot_confirm.h>
 #include <rakos/boot_manager.h>
 #include <rakos/display_manager.h>
 #include <rakos/input_manager.h>
@@ -34,6 +35,7 @@ bool AppRuntime::beginHardware(DisplayManager &display, InputManager &input) {
     return true;
 #else
     i2cBusBegin();
+#if RAKOS_HAS_IO_EXPANDER
     auto &expander = IoExpander::instance();
     if (!expander.begin()) {
         Serial.println("[APP] IO expander init failed");
@@ -41,6 +43,9 @@ bool AppRuntime::beginHardware(DisplayManager &display, InputManager &input) {
     }
     expander.boardPowerOn();
     delay(100);
+#else
+    Serial.println("[APP] Direct-wired board: no IO expander power sequence");
+#endif
 
     input.init();
     (void)display.initTouch();
@@ -52,7 +57,10 @@ bool AppRuntime::beginHardware(DisplayManager &display, InputManager &input) {
 #endif
 }
 
-void AppRuntime::pumpUi(DisplayManager &display) {
+void AppRuntime::pumpUi(DisplayManager &display, uint32_t app_ready_ms) {
+    if (app_ready_ms != 0) {
+        AppBootConfirm::tick(app_ready_ms, 3000);
+    }
 #if defined(RAKOS_BOARD_WAVESHARE_LCD5) || defined(RAKOS_BOARD_WAVESHARE_LCD5B)
     (void)display;
     vTaskDelay(pdMS_TO_TICKS(5));

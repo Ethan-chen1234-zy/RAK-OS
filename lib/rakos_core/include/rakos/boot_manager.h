@@ -23,4 +23,13 @@ public:
     static void reboot();
     static void logSummary();
     static int getOtaState(const esp_partition_t *part);
+
+    /** True once after ESP-IDF rolled back from a bad ota_1 boot to ota_0. */
+    static bool consumeAppRollbackNotice();
+
+    /** ota_1 image is pending first-boot confirmation. */
+    static bool isOta1PendingVerify();
+
+private:
+    static void detectAppRollbackOnOsBoot();
 };

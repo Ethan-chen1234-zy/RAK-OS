@@ -1,5 +1,6 @@
 #include <rakos/boot_manager.h>
 #include <esp_ota_ops.h>
+#include <Preferences.h>
 
 void BootManager::begin() {
     logSummary();
@@ -89,4 +90,67 @@ void BootManager::logSummary() {
     logPart("boot", s.boot);
     logPart("ota_0", s.ota0);
     logPart("ota_1", s.ota1);
+
+    BootManager::detectAppRollbackOnOsBoot();
+}
+
+namespace {
+
+constexpr const char *kBootPrefsNs = "rakos_boot";
+constexpr const char *kKeyRollbackNotice = "app_rb";
+
+void setRollbackNoticeFlag() {
+    Preferences prefs;
+    if (prefs.begin(kBootPrefsNs, false)) {
+        prefs.putBool(kKeyRollbackNotice, true);
+    }
+}
+
+}  // namespace
+
+void BootManager::detectAppRollbackOnOsBoot() {
+    if (!isRunningOsSlot()) {
+        return;
+    }
+
+    const esp_partition_t *ota1 =
+        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, nullptr);
+    if (!ota1) {
+        return;
+    }
+
+    esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
+    if (esp_ota_get_state_partition(ota1, &state) != ESP_OK) {
+        return;
+    }
+
+    if (state == ESP_OTA_IMG_ABORTED || state == ESP_OTA_IMG_INVALID) {
+        Serial.println("[BOOT] Previous app boot failed — rolled back to ota_0");
+        setRollbackNoticeFlag();
+    }
+}
+
+bool BootManager::consumeAppRollbackNotice() {
+    Preferences prefs;
+    if (!prefs.begin(kBootPrefsNs, false)) {
+        return false;
+    }
+    const bool flag = prefs.getBool(kKeyRollbackNotice, false);
+    if (flag) {
+        prefs.putBool(kKeyRollbackNotice, false);
+    }
+    return flag;
+}
+
+bool BootManager::isOta1PendingVerify() {
+    const esp_partition_t *ota1 =
+        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, nullptr);
+    if (!ota1) {
+        return false;
+    }
+    esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
+    if (esp_ota_get_state_partition(ota1, &state) != ESP_OK) {
+        return false;
+    }
+    return state == ESP_OTA_IMG_PENDING_VERIFY;
 }
