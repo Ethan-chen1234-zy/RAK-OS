@@ -8,6 +8,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **App rollback (ota_1)**: ESP-IDF bootloader rollback to `ota_0` when a newly installed app fails first boot
+- **`AppInstaller`**: SD install via `esp_ota_*`, CRC32 skip for identical images, force reinstall after rollback
+- **`AppBootConfirm`**: apps call `esp_ota_mark_app_valid_cancel_rollback()` after 3 s grace via `AppRuntime::pumpUi()`
+- Rollback notice dialog on OS boot when previous app boot failed
+
+### Changed
+
+- Launcher uses `AppInstaller::installFromSd()` instead of full-partition erase + raw write
+- Removed `-Wl,--wrap=esp_ota_mark_app_valid_cancel_rollback` from app builds; deleted per-app `app_policy.cpp` stubs
+- `sdkconfig.defaults`: `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`
+
+### Added (previous)
+
 - **App-grid launcher** (`rakos_os_appui`, `rakos_os_lcd5_appui`): icon tiles, vertical paging, system row for **Flash** / **SD Scan**
 - **Demo apps**: BtnApp, MeterApp, SliderApp (`btn_app`, `meter_app`, `slider_app` PlatformIO envs)
 - **WiFi from SD**: `wifi.ini` on TF card root (`ssid` / `password`); boot scan + connect + NTP (UTC+8)
@@ -31,7 +44,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Known issues
 
-- Launching an app **copies full `app.bin` to `ota_1`** each time (slow; SD must stay mounted)
+- Launching an app **skips reflash** when SD `app.bin` CRC matches last install (fast relaunch)
 - `OsMode::Maker` exists in NVS but USB “Create App” workflow not implemented yet
 - No per-app `manifest.json` / custom icons (folder name + letter tile only)
 - Meshtastic as RAKOS app: experimental; no onboard SX1262 on AMOLED 1.8"
