@@ -3,6 +3,7 @@
 #include "ui_compat.h"
 #include "ui_msgbox.h"
 #include "ui_fonts.h"
+#include <rakos/app_installer.h>
 #include <rakos/pin_config.h>
 #include <rakos/wifi_sd_config.h>
 #include <rakos/sd_fs.h>
@@ -63,6 +64,13 @@ void LauncherUI::begin(DisplayManager *display,
     buildShell();
     showScreen(Screen::kHome);
     last_status_ms_ = millis();
+
+    if (BootManager::consumeAppRollbackNotice()) {
+        showMessage("App rolled back",
+                    "The last app failed to start.\n"
+                    "RAKOS is running (ota_0).\n"
+                    "Reinstall from SD or pick another app.");
+    }
 }
 
 void LauncherUI::onStorageReady(bool sd_ready) {
@@ -298,6 +306,13 @@ void LauncherUI::showScreen(Screen screen) {
     if (content_area_) {
         lv_obj_clean(content_area_);
         lv_obj_scroll_to_y(content_area_, 0, LV_ANIM_OFF);
+#if defined(RAKOS_UI_APP_GRID)
+        if (screen != Screen::kApps) {
+            lv_obj_add_flag(content_area_, LV_OBJ_FLAG_SCROLLABLE);
+        }
+#else
+        lv_obj_add_flag(content_area_, LV_OBJ_FLAG_SCROLLABLE);
+#endif
     }
 
     setNavActive(screen_);
@@ -949,89 +964,6 @@ void LauncherUI::hideInstallOverlay() {
     }
 }
 
-namespace {
-
-File openSdAppBin(const String &path) {
-    fs::FS &fs = rakos::sdFs();
-    File f = fs.open(path.c_str(), FILE_READ);
-    if (f) {
-        return f;
-    }
-    if (!path.startsWith(SD_MOUNT_POINT)) {
-        const String alt = String(SD_MOUNT_POINT) + (path.startsWith("/") ? path : String("/") + path);
-        f = fs.open(alt.c_str(), FILE_READ);
-        if (f) {
-            return f;
-        }
-    }
-    if (path.startsWith(SD_MOUNT_POINT)) {
-        const String alt = path.substring(strlen(SD_MOUNT_POINT));
-        f = fs.open(alt.c_str(), FILE_READ);
-    }
-    return f;
-}
-
-} // namespace
-
-bool LauncherUI::flashAppBinToOta1(const String &path) {
-    const esp_partition_t *part =
-        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, nullptr);
-    if (!part) {
-        return false;
-    }
-
-    File f = openSdAppBin(path);
-    if (!f) {
-        Serial.printf("[APP] Cannot open SD file: %s\n", path.c_str());
-        return false;
-    }
-
-    const size_t image_size = f.size();
-    if (image_size == 0 || image_size > part->size) {
-        f.close();
-        return false;
-    }
-
-    constexpr size_t kEraseStep = 0x10000;
-    size_t erased = 0;
-    while (erased < part->size) {
-        const size_t chunk = (part->size - erased) > kEraseStep ? kEraseStep : (part->size - erased);
-        updateInstallOverlay("Erasing ota_1...", erased, part->size);
-        if (esp_partition_erase_range(part, erased, chunk) != ESP_OK) {
-            f.close();
-            return false;
-        }
-        erased += chunk;
-    }
-
-    uint8_t buf[4096];
-    size_t offset = 0;
-    size_t last_ui = 0;
-    while (f.available()) {
-        const size_t n = f.read(buf, sizeof(buf));
-        if (n == 0) {
-            break;
-        }
-        if (esp_partition_write(part, offset, buf, n) != ESP_OK) {
-            f.close();
-            return false;
-        }
-        offset += n;
-        if ((offset - last_ui) >= 32768 || offset == image_size) {
-            updateInstallOverlay("Copying SD -> flash...", offset, image_size);
-            last_ui = offset;
-        }
-    }
-    f.close();
-
-    if (offset != image_size) {
-        return false;
-    }
-
-    updateInstallOverlay("Install complete", image_size, image_size);
-    return true;
-}
-
 void LauncherUI::launchSelectedApp(const AppEntry &app) {
     if (!app.has_bin) {
         showMessage("Cannot launch", "app.bin not found on SD");
@@ -1041,16 +973,24 @@ void LauncherUI::launchSelectedApp(const AppEntry &app) {
     playFeedback(920);
     showInstallOverlay(app);
 
-    Serial.printf("[APP] Flashing %s\n", app.bin_path.c_str());
+    Serial.printf("[APP] Installing %s\n", app.bin_path.c_str());
 
-    if (!flashAppBinToOta1(app.bin_path)) {
-        Serial.println("[APP] Flash failed");
+    auto progress = [this](const char *phase, size_t done, size_t total) {
+        updateInstallOverlay(phase, done, total);
+    };
+
+    const auto result = rakos::AppInstaller::installFromSd(app.bin_path.c_str(), progress);
+
+    if (result == rakos::AppInstallResult::kSkipSameImage) {
+        updateInstallOverlay("Same app — launching...", 100, 100);
+    } else if (result != rakos::AppInstallResult::kOk) {
+        Serial.printf("[APP] Install failed: %s\n", rakos::AppInstaller::resultMessage(result));
         hideInstallOverlay();
-        showMessage("Flash failed", "Check SD file and size");
+        showMessage("Install failed", rakos::AppInstaller::resultMessage(result));
         return;
     }
 
-    Serial.println("[APP] Flash OK, rebooting to app");
+    Serial.println("[APP] Install OK, rebooting to app");
     updateInstallOverlay("Rebooting to app...", 100, 100);
     delay(400);
 

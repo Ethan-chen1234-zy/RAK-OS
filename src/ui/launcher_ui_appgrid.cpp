@@ -196,17 +196,91 @@ void on_app_grid_page_scroll(lv_event_t *e) {
     if (page_h <= 0) {
         return;
     }
-    const int page = (lv_obj_get_scroll_y(viewport) + page_h / 2) / page_h;
     const int pages = lv_obj_get_child_count(viewport);
-    if (pages > 1) {
-        lv_label_set_text_fmt(indicator, "%d / %d", page + 1, pages);
+    if (pages <= 1) {
+        return;
     }
+    int page = (lv_obj_get_scroll_y(viewport) + page_h / 2) / page_h;
+    if (page < 0) {
+        page = 0;
+    }
+    if (page >= pages) {
+        page = pages - 1;
+    }
+    lv_label_set_text_fmt(indicator, "%d / %d", page + 1, pages);
+}
+
+void app_grid_scroll_to_page(lv_obj_t *viewport, int page_index, lv_anim_enable_t anim) {
+    if (!viewport) {
+        return;
+    }
+    const int page_h = lv_obj_get_height(viewport);
+    if (page_h <= 0) {
+        return;
+    }
+    const int pages = lv_obj_get_child_count(viewport);
+    if (pages <= 0) {
+        return;
+    }
+    if (page_index < 0) {
+        page_index = 0;
+    }
+    if (page_index >= pages) {
+        page_index = pages - 1;
+    }
+    lv_obj_scroll_to_y(viewport, page_index * page_h, anim);
+}
+
+void on_app_grid_page_prev(lv_event_t *e) {
+    lv_obj_t *viewport = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+    if (!viewport) {
+        return;
+    }
+    const int page_h = lv_obj_get_height(viewport);
+    if (page_h <= 0) {
+        return;
+    }
+    const int page = lv_obj_get_scroll_y(viewport) / page_h;
+    app_grid_scroll_to_page(viewport, page - 1, LV_ANIM_ON);
+}
+
+void on_app_grid_page_next(lv_event_t *e) {
+    lv_obj_t *viewport = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+    if (!viewport) {
+        return;
+    }
+    const int page_h = lv_obj_get_height(viewport);
+    if (page_h <= 0) {
+        return;
+    }
+    const int pages = lv_obj_get_child_count(viewport);
+    const int page = (lv_obj_get_scroll_y(viewport) + page_h / 2) / page_h;
+    app_grid_scroll_to_page(viewport, page + 1, LV_ANIM_ON);
+    (void)pages;
+}
+
+lv_obj_t *make_page_nav_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb, lv_obj_t *viewport) {
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_set_size(btn, 44, 36);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_20, 0);
+    lv_obj_set_style_bg_color(btn, ui_color_card(), 0);
+    lv_obj_set_style_radius(btn, 10, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, viewport);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, sym);
+    ui_style_accent_label(lbl);
+    lv_obj_center(lbl);
+    return btn;
 }
 
 } // namespace
 
 void LauncherUI::buildAppGridPage() {
     const GridLayout g = grid_layout();
+
+    if (content_area_) {
+        lv_obj_clear_flag(content_area_, LV_OBJ_FLAG_SCROLLABLE);
+    }
 
     lv_obj_t *wrap = lv_obj_create(content_area_);
     ui_style_page(wrap);
@@ -258,22 +332,38 @@ void LauncherUI::buildAppGridPage() {
         lv_obj_remove_style_all(viewport);
         lv_obj_set_width(viewport, lv_pct(100));
         lv_obj_set_height(viewport, g.viewport_h);
+        lv_obj_set_flex_flow(viewport, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(viewport, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
         lv_obj_set_scroll_dir(viewport, LV_DIR_VER);
         lv_obj_set_scroll_snap_y(viewport, LV_SCROLL_SNAP_START);
         lv_obj_add_flag(viewport, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(viewport, LV_OBJ_FLAG_SCROLL_MOMENTUM);
         lv_obj_set_scrollbar_mode(viewport, LV_SCROLLBAR_MODE_OFF);
         lv_obj_set_style_pad_all(viewport, 0, 0);
         lv_obj_set_style_pad_row(viewport, 0, 0);
 
-        lv_obj_t *page_indicator = lv_label_create(wrap);
+        lv_obj_t *page_nav = lv_obj_create(wrap);
+        lv_obj_remove_style_all(page_nav);
+        lv_obj_set_width(page_nav, lv_pct(100));
+        lv_obj_set_height(page_nav, LV_SIZE_CONTENT);
+        lv_obj_clear_flag(page_nav, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_flex_flow(page_nav, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(page_nav, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(page_nav, 12, 0);
+
+        lv_obj_t *page_indicator = nullptr;
         if (page_count > 1) {
+            make_page_nav_btn(page_nav, LV_SYMBOL_LEFT, on_app_grid_page_prev, viewport);
+            page_indicator = lv_label_create(page_nav);
             lv_label_set_text_fmt(page_indicator, "1 / %d", page_count);
             ui_style_muted_label(page_indicator);
             lv_obj_set_style_text_align(page_indicator, LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_width(page_indicator, lv_pct(100));
+            lv_obj_set_width(page_indicator, 72);
+            lv_obj_add_event_cb(viewport, on_app_grid_page_scroll, LV_EVENT_SCROLL, page_indicator);
             lv_obj_add_event_cb(viewport, on_app_grid_page_scroll, LV_EVENT_SCROLL_END, page_indicator);
+            make_page_nav_btn(page_nav, LV_SYMBOL_RIGHT, on_app_grid_page_next, viewport);
         } else {
-            lv_obj_add_flag(page_indicator, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(page_nav, LV_OBJ_FLAG_HIDDEN);
         }
 
         for (int p = 0; p < page_count; ++p) {
@@ -281,6 +371,8 @@ void LauncherUI::buildAppGridPage() {
             lv_obj_remove_style_all(page);
             lv_obj_set_width(page, lv_pct(100));
             lv_obj_set_height(page, g.viewport_h);
+            lv_obj_set_style_min_height(page, g.viewport_h, 0);
+            lv_obj_set_style_max_height(page, g.viewport_h, 0);
             lv_obj_clear_flag(page, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_flex_flow(page, LV_FLEX_FLOW_ROW_WRAP);
             lv_obj_set_style_pad_column(page, g.pad_col, 0);
@@ -294,6 +386,8 @@ void LauncherUI::buildAppGridPage() {
                 make_app_tile(page, g, item.letter, item.label, item.cb, item.user_data);
             }
         }
+
+        lv_obj_update_layout(viewport);
     } else if (page_count == 0 && (!storage_ || !storage_->sdReady())) {
         lv_obj_t *hint = lv_label_create(wrap);
         lv_label_set_text(hint, "SD not mounted - tap SD Scan after insert");

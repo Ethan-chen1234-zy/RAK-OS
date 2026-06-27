@@ -102,7 +102,6 @@ private:
     void showInstallOverlay(const AppEntry &app);
     void updateInstallOverlay(const char *phase, size_t done, size_t total);
     void hideInstallOverlay();
-    bool flashAppBinToOta1(const String &path);
     void showMessage(const char *title, const char *text);
     void launchSelectedApp(const AppEntry &app);
     void toggleScreenBlank();
